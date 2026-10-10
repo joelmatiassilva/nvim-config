@@ -23,6 +23,7 @@ local OPC = {
   formato_al_guardar = 'proyecto', -- 'proyecto' (solo si el proyecto lo configura) | 'siempre' | 'nunca'
   hover_mouse = true,              -- documentación flotante al dejar el puntero quieto
   arbol_al_abrir = true,           -- muestra el árbol de archivos al arrancar
+  portapapeles_automatico = true,  -- y/d/p usan el portapapeles del sistema; con false, solo Ctrl+C/X/V y el menú
   python_lsp = 'basedpyright',     -- 'basedpyright' | 'ty'
 }
 
@@ -56,7 +57,7 @@ o.shiftwidth = 2
 o.softtabstop = 2
 o.updatetime = 300
 o.timeoutlen = 500
-o.keymodel = 'startsel'      -- Shift+flechas inicia una selección
+o.keymodel = 'startsel,stopsel' -- Shift+flechas selecciona; una flecha sola termina la selección
 o.whichwrap = 'b,s,<,>,[,]'  -- las flechas pasan de una línea a otra
 o.title = true
 o.list = true
@@ -101,9 +102,9 @@ elseif es_wsl or vim.env.SSH_TTY then
     }
   end
 end
-vim.schedule(function()
-  vim.o.clipboard = 'unnamedplus' -- y/p usan el portapapeles del sistema
-end)
+if OPC.portapapeles_automatico then
+  vim.schedule(function() vim.o.clipboard = 'unnamedplus' end)
+end
 
 -- Atajos ------------------------------------------------------------------------
 local map = vim.keymap.set
@@ -451,9 +452,9 @@ local function entradas_portapapeles(menu)
 end
 
 local function entradas_ventana(menu)
-  entrada(menu, 'n', 'Dividir a la derecha', '<Cmd>vsplit<CR>')
-  entrada(menu, 'n', 'Dividir abajo', '<Cmd>split<CR>')
-  entrada(menu, 'n', 'Cerrar división', '<Cmd>silent! close<CR>')
+  entrada(menu, 'ni', 'Dividir a la derecha', '<Cmd>vsplit<CR>')
+  entrada(menu, 'ni', 'Dividir abajo', '<Cmd>split<CR>')
+  entrada(menu, 'ni', 'Cerrar división', '<Cmd>silent! close<CR>')
 end
 
 local function menu_editor(menu)
@@ -467,18 +468,18 @@ local function menu_editor(menu)
   if #vim.diagnostic.get(buf, { lnum = vim.fn.line('.') - 1 }) > 0 then
     entrada(menu, 'n', 'Ver problema de esta línea', vim.diagnostic.open_float)
   end
-  entrada(menu, 'n', 'Formatear documento', formatear)
+  entrada(menu, 'ni', 'Formatear documento', formatear)
   separador(menu)
   entradas_portapapeles(menu)
   separador(menu)
   entradas_ventana(menu)
   separador(menu)
-  entrada(menu, 'n', 'Buscar archivo…', function() Snacks.picker.files() end)
-  entrada(menu, 'n', 'Buscar texto…', function() Snacks.picker.grep() end)
+  entrada(menu, 'ni', 'Buscar archivo…', function() Snacks.picker.files() end)
+  entrada(menu, 'ni', 'Buscar texto…', function() Snacks.picker.grep() end)
   separador(menu)
   entrada(menu, 'n', 'Comentar línea', 'gcc', true)
   entrada(menu, 'v', 'Comentar selección', 'gc', true)
-  entrada(menu, 'n', 'Ejecutar archivo', ejecutar_archivo)
+  entrada(menu, 'ni', 'Ejecutar archivo', ejecutar_archivo)
 end
 
 local function menu_arbol(menu)
@@ -807,6 +808,7 @@ require('lazy').setup({
             } or { folder = { arrow_closed = '+', arrow_open = '-' } },
           },
         },
+        hijack_directories = { enable = false }, -- las carpetas las maneja abrir_carpeta, más abajo
         filters = { dotfiles = false, custom = { '^\\.git$', '^__pycache__$' } },
         -- Con varias divisiones abre en la última usada, sin preguntar por teclado en cuál.
         actions = { open_file = { window_picker = { enable = false } } },
@@ -1214,13 +1216,34 @@ end, { desc = 'Instala servidores de lenguaje y parsers (bloquea hasta terminar)
 
 local con_interfaz = #vim.api.nvim_list_uis() > 0
 
+-- Abrir una carpeta (nvim . o :edit carpeta) la muestra en el árbol lateral,
+-- con un buffer vacío al lado para editar.
+local function abrir_carpeta(buf)
+  local ruta = vim.api.nvim_buf_get_name(buf)
+  if ruta == '' or vim.bo[buf].buftype ~= '' or vim.fn.isdirectory(ruta) == 0 then return false end
+  vim.cmd.cd(vim.fn.fnameescape(ruta))
+  vim.cmd.enew()
+  pcall(vim.api.nvim_buf_delete, buf, { force = true })
+  require('nvim-tree.api').tree.open()
+  return true
+end
+
 autocmd('VimEnter', {
   desc = 'Muestra el árbol al arrancar',
-  callback = function()
+  callback = function(ev)
+    if not con_interfaz or abrir_carpeta(ev.buf) then return end
     local tipo = vim.bo.filetype
-    if not OPC.arbol_al_abrir or not con_interfaz or vim.o.columns < 100 or vim.o.diff then return end
-    if tipo == 'gitcommit' or tipo == 'gitrebase' or tipo == 'NvimTree' then return end
+    if not OPC.arbol_al_abrir or vim.o.columns < 100 or vim.o.diff then return end
+    if tipo == 'gitcommit' or tipo == 'gitrebase' then return end
     require('nvim-tree.api').tree.toggle({ focus = false })
+  end,
+})
+
+autocmd('BufEnter', {
+  desc = 'Las carpetas se abren en el árbol',
+  nested = true,
+  callback = function(ev)
+    if vim.v.vim_did_enter == 1 then abrir_carpeta(ev.buf) end
   end,
 })
 

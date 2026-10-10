@@ -9,7 +9,8 @@ Tres archivos:
 ## Instalar en una máquina nueva
 
 ```bash
-git clone https://github.com/joelmatiassilva/nvim-config.git ~/.config/nvim
+gh auth login                                            # el repo es privado
+gh repo clone joelmatiassilva/nvim-config ~/.config/nvim
 ~/.config/nvim/bootstrap.sh
 ```
 
@@ -63,6 +64,7 @@ Al inicio de `init.lua` está la tabla `OPC`:
 | `formato_al_guardar` | `'proyecto'` (solo si el proyecto configura ruff, Prettier o Biome), `'siempre'`, `'nunca'` |
 | `hover_mouse` | Documentación al dejar el puntero quieto |
 | `arbol_al_abrir` | Mostrar el árbol al arrancar |
+| `portapapeles_automatico` | Con `false`, `y`/`d`/`p` dejan de usar el portapapeles del sistema (quedan `Ctrl+C/X/V` y el menú) |
 | `python_lsp` | `'basedpyright'` o `'ty'` |
 
 ## Mantenimiento
