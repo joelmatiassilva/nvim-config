@@ -1230,6 +1230,7 @@ end
 
 autocmd('VimEnter', {
   desc = 'Muestra el árbol al arrancar',
+  nested = true, -- para que el buffer vacío reciba su barra de ventana
   callback = function(ev)
     if not con_interfaz or abrir_carpeta(ev.buf) then return end
     local tipo = vim.bo.filetype

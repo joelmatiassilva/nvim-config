@@ -46,7 +46,7 @@ es_wsl()   { grep -qi microsoft /proc/version 2>/dev/null; }
 # version_ok MINIMO ACTUAL → verdadero si ACTUAL >= MINIMO
 version_ok() { [ "$(printf '%s\n%s\n' "$1" "$2" | sort -V | head -n 1)" = "$1" ]; }
 
-version_nvim() { "$1" --version 2>/dev/null | head -n 1 | sed -E 's/^NVIM v([0-9.]+).*/\1/'; }
+version_nvim() { "$1" --version 2>/dev/null | sed -n -E '1s/^NVIM v([0-9.]+).*/\1/p'; }
 version_tree_sitter() { tree-sitter --version 2>/dev/null | sed -E 's/^tree-sitter ([0-9.]+).*/\1/'; }
 
 # Imprime la ruta de un Neovim que sirva (el de ~/.local/opt tiene prioridad).
@@ -177,7 +177,10 @@ paso_nvim() {
 
 # ── Fuente ──────────────────────────────────────────────────────────────────
 fuente_registrada_windows() {
-  reg.exe query 'HKCU\Software\Microsoft\Windows NT\CurrentVersion\Fonts' 2>/dev/null | grep -q "$FUENTE Regular"
+  # Sin tubería: con pipefail, grep -q corta la lectura y reg.exe "falla" aunque haya coincidencia.
+  local registro
+  registro="$(reg.exe query 'HKCU\Software\Microsoft\Windows NT\CurrentVersion\Fonts' 2>/dev/null || true)"
+  grep -q "$FUENTE Regular" <<<"$registro"
 }
 
 fuente_windows() {
