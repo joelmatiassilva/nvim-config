@@ -10,9 +10,11 @@ Tres archivos:
 
 ```bash
 gh auth login                                            # el repo es privado
-gh repo clone joelmatiassilva/nvim-config ~/.config/nvim
-~/.config/nvim/bootstrap.sh
+gh repo clone joelmatiassilva/nvim-config ~/projects/nvim-config
+~/projects/nvim-config/nvim/bootstrap.sh
 ```
+
+El script enlaza `~/.config/nvim` a esta carpeta, así que se edita siempre en el repo.
 
 El script instala Neovim 0.12.6 en `~/.local` (sin sudo), `tree-sitter`, `uv`, `ruff`, `basedpyright`, la fuente JetBrainsMono Nerd Font y todos los plugins. Solo pide contraseña para los paquetes del sistema (compilador, `ripgrep`, `fd`). Se puede ejecutar las veces que haga falta.
 

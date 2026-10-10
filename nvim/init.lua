@@ -3,8 +3,10 @@
 -- ════════════════════════════════════════════════════════════════════════════
 --
 --  MÁQUINA NUEVA
---    git clone <este-repo> ~/.config/nvim && ~/.config/nvim/bootstrap.sh
---    (instala Neovim 0.12, compilador, tree-sitter, uv, la fuente y los plugins)
+--    gh repo clone <usuario>/nvim-config ~/projects/nvim-config
+--    ~/projects/nvim-config/nvim/bootstrap.sh
+--    (instala Neovim 0.12, compilador, tree-sitter, uv, la fuente y los plugins,
+--     y enlaza ~/.config/nvim a esta carpeta)
 --
 --  LO ESENCIAL   (Espacio = tecla líder; al pulsarla aparece la ayuda de atajos)
 --    Mouse     clic derecho = menú · doble clic en el árbol = abrir · arrastra bordes y barras
