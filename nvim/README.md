@@ -2,7 +2,7 @@
 
 - `init.lua`: toda la configuración, en secciones y comentada. Requiere Neovim 0.12.
 - `lazy-lock.json`: versión exacta de cada plugin, para que quede igual en todas las máquinas.
-- `bootstrap.sh`: prepara una máquina nueva (Neovim, herramientas, fuente, tmux y plugins). Ver el [README principal](../README.md).
+- `bootstrap.sh`: prepara una máquina nueva (Neovim, herramientas, fuente, tmux, instrucciones para agentes y plugins). Ver el [README principal](../README.md).
 
 Cómo usarlo todo: **[Guía de Neovim](../docs/guia-neovim.md)** y **[Guía de tmux](../docs/guia-tmux.md)**.
 

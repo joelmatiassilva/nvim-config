@@ -1,6 +1,6 @@
 # nvim-config
 
-Mi configuración de Neovim y tmux, para llevarla a cualquier máquina.
+Mi configuración de Neovim, tmux y agentes de código, para llevarla a cualquier máquina.
 
 ## Guías
 
@@ -21,11 +21,12 @@ El script deja todo listo y se puede ejecutar las veces que haga falta:
 
 - Neovim 0.12.6 en `~/.local`, sin sudo.
 - Herramientas: `tree-sitter`, `uv`, `ruff`, `basedpyright` y, en WSL, `win32yank` para el portapapeles.
+- Las herramientas de línea de comandos que piden las instrucciones para agentes: `ast-grep`, `rg`, `fd`, `tree`, `jq` y `yq`.
 - La fuente JetBrainsMono Nerd Font. En WSL la instala en Windows y la configura en Windows Terminal.
-- Los enlaces `~/.config/nvim` → `nvim/` y `~/.tmux.conf` → `tmux/tmux.conf`, de modo que siempre se edita en el repo.
+- Los enlaces `~/.config/nvim` → `nvim/`, `~/.tmux.conf` → `tmux/tmux.conf` y `~/.claude/CLAUDE.md` → `global-agents.md`, de modo que siempre se edita en el repo.
 - Plugins, servidores de lenguaje y parsers, en las versiones de `nvim/lazy-lock.json`.
 
-Solo pide contraseña para los paquetes del sistema (compilador, `ripgrep`, `fd`, `tmux`). Necesita Node.js ya instalado para los servidores de TypeScript.
+Solo pide contraseña para los paquetes del sistema (compilador, `ripgrep`, `fd`, `tmux`, `tree`, `jq`). Necesita Node.js ya instalado para los servidores de TypeScript.
 
 `nvim/bootstrap.sh revisar` muestra qué hay y qué falta, sin cambiar nada.
 
@@ -33,8 +34,9 @@ Probado en Ubuntu sobre WSL. El diseño contempla Linux nativo y macOS, pero ah�
 
 ## Contenido
 
-| Carpeta | Qué hay |
+| Ruta | Qué hay |
 |---|---|
+| `global-agents.md` | Instrucciones globales para agentes de código. Claude Code las lee en cada sesión desde `~/.claude/CLAUDE.md` |
 | `nvim/` | `init.lua` (toda la configuración en un archivo), `lazy-lock.json` y `bootstrap.sh` |
 | `tmux/` | `tmux.conf` |
 | `windows-terminal/` | `settings.json` de referencia, con la fuente |

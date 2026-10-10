@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
-# bootstrap.sh — deja una máquina lista para esta configuración de Neovim y tmux.
+# bootstrap.sh — deja una máquina lista para esta configuración de Neovim, tmux y agentes.
 #
-#   ./bootstrap.sh               todo: herramientas, Neovim, fuente, tmux, plugins y revisión
+#   ./bootstrap.sh               todo: herramientas, Neovim, fuente, tmux, agentes, plugins y revisión
 #   ./bootstrap.sh revisar       solo muestra qué hay y qué falta (no cambia nada)
-#   ./bootstrap.sh herramientas  compilador, tree-sitter, uv, ruff, basedpyright, tmux…
+#   ./bootstrap.sh herramientas  compilador, tree-sitter, uv, ruff, basedpyright, tmux, ast-grep, yq…
 #   ./bootstrap.sh nvim          Neovim en ~/.local (sin sudo)
 #   ./bootstrap.sh fuente        JetBrainsMono Nerd Font (en WSL: Windows + Windows Terminal)
 #   ./bootstrap.sh tmux          enlaza ~/.tmux.conf a ../tmux/tmux.conf
+#   ./bootstrap.sh agentes       enlaza ~/.claude/CLAUDE.md a ../global-agents.md
 #   ./bootstrap.sh plugins       plugins, servidores de lenguaje y parsers
 #
 # Es idempotente: se puede ejecutar las veces que haga falta.
@@ -21,6 +22,7 @@ NERD_FONTS_VERSION="${NERD_FONTS_VERSION:-v3.5.1}"
 FUENTE="JetBrainsMono Nerd Font"
 ESTILOS=(Regular Bold Italic BoldItalic)
 TMUX_MINIMO="3.2"
+YQ_VERSION="${YQ_VERSION:-v4.54.1}"
 WIN32YANK_VERSION="${WIN32YANK_VERSION:-v0.1.1}"
 
 APP="${NVIM_APPNAME:-nvim}"
@@ -29,6 +31,8 @@ REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}/$APP"
 TMUX_CONF="$(dirname "$REPO")/tmux/tmux.conf"
 TMUX_DESTINO="$HOME/.tmux.conf"
+AGENTES_MD="$(dirname "$REPO")/global-agents.md"
+AGENTES_DESTINO="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/CLAUDE.md"
 BIN="$HOME/.local/bin"
 OPT="$HOME/.local/opt"
 NVIM_DIR="$OPT/nvim-$NVIM_VERSION"
@@ -116,6 +120,34 @@ instalar_win32yank() {
   rm -rf "$tmp"
 }
 
+# Hay dos programas llamados yq. El que se usa aquí es el de mikefarah (un solo
+# binario, sintaxis parecida a jq); el de apt y PyPI es otro.
+yq_correcto() { tiene yq && [[ "$(yq --version 2>&1)" == *mikefarah* ]]; }
+
+instalar_yq() {
+  if yq_correcto; then
+    ok "yq"
+    return
+  fi
+  local plataforma
+  case "$SO-$ARQ" in
+    Linux-x86_64)              plataforma=linux_amd64 ;;
+    Linux-aarch64|Linux-arm64) plataforma=linux_arm64 ;;
+    Darwin-arm64)              plataforma=darwin_arm64 ;;
+    Darwin-x86_64)             plataforma=darwin_amd64 ;;
+    *) aviso "No hay binario de yq para $SO-$ARQ; instálalo con tu gestor de paquetes."; return ;;
+  esac
+  mkdir -p "$BIN"
+  if curl -fsSL -o "$BIN/yq.tmp" "https://github.com/mikefarah/yq/releases/download/$YQ_VERSION/yq_$plataforma"; then
+    chmod +x "$BIN/yq.tmp"
+    mv -f "$BIN/yq.tmp" "$BIN/yq"
+    ok "yq $YQ_VERSION instalado en $BIN"
+  else
+    rm -f "$BIN/yq.tmp"
+    aviso "No se pudo descargar yq"
+  fi
+}
+
 instalar_uv_tool() { # paquete ejecutable
   if tiene "$2"; then
     ok "$1"
@@ -132,6 +164,8 @@ paso_herramientas() {
   tiene rg || faltan+=(ripgrep)
   tiene fd || tiene fdfind || faltan+=(fd-find)
   tiene tmux || faltan+=(tmux)
+  tiene tree || faltan+=(tree)
+  tiene jq || faltan+=(jq)
 
   if ((${#faltan[@]})); then
     if tiene apt-get; then
@@ -159,6 +193,7 @@ paso_herramientas() {
 
   instalar_tree_sitter
   instalar_win32yank
+  instalar_yq
 
   if ! tiene uv; then
     info "Instalando uv…"
@@ -168,6 +203,10 @@ paso_herramientas() {
     ok "$(uv --version)"
     instalar_uv_tool ruff ruff
     instalar_uv_tool basedpyright basedpyright-langserver
+    instalar_uv_tool ast-grep-cli ast-grep
+    # El paquete trae también el alias "sg", que taparía al sg del sistema (el
+    # que ejecuta un comando con otro grupo). Se usa siempre el nombre largo.
+    if [[ "$(readlink "$BIN/sg" 2>/dev/null || true)" == */ast-grep-cli/* ]]; then rm -f "$BIN/sg"; fi
   fi
 
   tiene node || aviso "Falta Node.js (lo usan los servidores de TypeScript). Sugerencia: https://github.com/nvm-sh/nvm"
@@ -337,6 +376,32 @@ paso_tmux() {
   fi
 }
 
+# ── Agentes ─────────────────────────────────────────────────────────────────
+# Instrucciones globales para agentes de código. Claude Code las lee de
+# ~/.claude/CLAUDE.md en cada sesión.
+agentes_enlazado() { [ -L "$AGENTES_DESTINO" ] && [ "$(readlink -f "$AGENTES_DESTINO")" = "$AGENTES_MD" ]; }
+
+paso_agentes() {
+  titulo "Agentes"
+  if [ ! -f "$AGENTES_MD" ]; then
+    info "No hay $AGENTES_MD; se omite."
+    return 0
+  fi
+  if agentes_enlazado; then
+    ok "$AGENTES_DESTINO ya apunta al repo"
+    return 0
+  fi
+  if [ -e "$AGENTES_DESTINO" ] || [ -L "$AGENTES_DESTINO" ]; then
+    local respaldo
+    respaldo="$AGENTES_DESTINO.bak-$(date +%Y%m%d-%H%M%S)"
+    mv "$AGENTES_DESTINO" "$respaldo"
+    info "Respaldo de las instrucciones anteriores: $respaldo"
+  fi
+  mkdir -p "$(dirname "$AGENTES_DESTINO")"
+  ln -s "$AGENTES_MD" "$AGENTES_DESTINO"
+  ok "Enlace $AGENTES_DESTINO → $AGENTES_MD"
+}
+
 # ── Plugins ─────────────────────────────────────────────────────────────────
 enlazar_config() {
   [ "$(readlink -f "$CONFIG" 2>/dev/null || true)" = "$REPO" ] && return 0
@@ -403,6 +468,13 @@ paso_revisar() {
       aviso "Falta el terminfo tmux-256color (tmux usará screen-256color) → sudo apt-get install -y ncurses-term"
     fi
   fi
+  if tiene ast-grep; then ok "ast-grep (buscar por estructura de código)"; else aviso "ast-grep → uv tool install ast-grep-cli"; fi
+  if tiene tree; then ok "tree"; else aviso "tree → sudo apt-get install -y tree"; fi
+  if tiene jq; then ok "jq"; else aviso "jq → sudo apt-get install -y jq"; fi
+  if yq_correcto; then ok "yq"; else aviso "yq → $0 herramientas"; fi
+  if [ -f "$AGENTES_MD" ]; then
+    if agentes_enlazado; then ok "$AGENTES_DESTINO enlazado al repo"; else aviso "$AGENTES_DESTINO no apunta al repo → $0 agentes"; fi
+  fi
   if ((esencial)); then
     printf '\n'
     aviso "Falta algo esencial (marcado con ✗)."
@@ -419,9 +491,10 @@ case "${1:-todo}" in
     paso_nvim
     paso_fuente
     paso_tmux
+    paso_agentes
     paso_plugins
     paso_revisar
     ;;
-  herramientas|nvim|fuente|tmux|plugins|revisar) "paso_$1" ;;
-  *) sed -n '2,13p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 2 ;;
+  herramientas|nvim|fuente|tmux|agentes|plugins|revisar) "paso_$1" ;;
+  *) sed -n '2,14p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 2 ;;
 esac
