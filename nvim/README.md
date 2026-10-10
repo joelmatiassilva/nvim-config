@@ -36,5 +36,5 @@ La tabla `OPC`, al inicio de `init.lua`:
 
 - Plugins: `:Lazy update` y luego guardar `lazy-lock.json` en git.
 - Servidores de lenguaje: `:Mason`.
-- Herramientas de Python: `uv tool upgrade --all`.
+- Herramientas instaladas con uv (`ruff`, `basedpyright`, `ast-grep`): `uv tool upgrade --all` y luego `./bootstrap.sh herramientas`, que vuelve a quitar el alias `sg` de ast-grep.
 - Revisar la instalación: `./bootstrap.sh revisar`.

@@ -375,7 +375,7 @@ Interruptores sin editar el archivo:
 | Actualizar plugins | `:Lazy update`, y después guardar `nvim/lazy-lock.json` en git |
 | Volver a las versiones guardadas | `:Lazy restore` |
 | Ver o instalar servidores de lenguaje | `:Mason` |
-| Actualizar las herramientas de Python | `uv tool upgrade --all` en la terminal |
+| Actualizar las herramientas instaladas con uv (`ruff`, `basedpyright`, `ast-grep`) | `uv tool upgrade --all` y luego `nvim/bootstrap.sh herramientas`, en la terminal |
 | Agregar resaltado para otro lenguaje | `:TSInstall nombre` |
 | Reiniciar el servidor de lenguaje | `:lsp restart` |
 | Ver qué formateador se usará | `:ConformInfo` |
