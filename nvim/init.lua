@@ -16,6 +16,8 @@
 --    Código    F12 definición · F2 renombrar · K documentación · Espacio cf formatear
 --    Ejecutar  Espacio r archivo actual (uv run / node) · Espacio t terminal
 --    Bloque    Ctrl+Q selección en bloque (Ctrl+V pega)
+--
+--  GUÍA COMPLETA: ../docs/guia-neovim.md y ../docs/guia-tmux.md
 
 -- ════════════════════════════════════════════════════════════════════════════
 --  1. OPCIONES RÁPIDAS — lo que más se suele querer cambiar
