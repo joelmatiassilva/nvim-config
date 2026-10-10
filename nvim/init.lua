@@ -515,6 +515,8 @@ local function menu_arbol(menu)
   entrada(menu, 'n', 'Filtrar lo visible…', api.live_filter.start)
   entrada(menu, 'n', 'Buscar texto en esta carpeta…', function() Snacks.picker.grep({ dirs = { carpeta_bajo_cursor() } }) end)
   separador(menu)
+  entrada(menu, 'n', 'Usar esta carpeta como raíz', api.tree.change_root_to_node)
+  entrada(menu, 'n', 'Subir la raíz un nivel', api.tree.change_root_to_parent)
   entrada(menu, 'n', 'Contraer todo', api.tree.collapse_all)
   entrada(menu, 'n', 'Actualizar', api.tree.reload)
 end
