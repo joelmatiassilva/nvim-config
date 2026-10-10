@@ -187,6 +187,7 @@ o.showmode = false           -- el modo ya lo muestra la barra de estado
 o.smoothscroll = true
 o.pumborder = 'rounded'      -- borde del menú de clic derecho
 o.foldcolumn = '1'           -- columna de pliegues: clic para plegar o desplegar
+o.foldtext = ''              -- la línea plegada conserva sus colores
 
 local ic = vim.fn.nr2char
 local ICO = OPC.nerd_font
@@ -324,6 +325,16 @@ local function proyecto_formatea(buf)
   return si
 end
 
+autocmd('BufWritePost', {
+  desc = 'Si cambia la configuración del proyecto, se vuelve a evaluar si formatea',
+  pattern = { 'pyproject.toml', 'ruff.toml', '.ruff.toml', 'package.json', '.prettierrc*', 'prettier.config.*', 'biome.json*' },
+  callback = function()
+    for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+      vim.b[buf].proyecto_formatea = nil
+    end
+  end,
+})
+
 local function formato_activo(buf)
   buf = (buf == nil or buf == 0) and vim.api.nvim_get_current_buf() or buf
   if vim.bo[buf].buftype ~= '' then return false end
@@ -353,9 +364,13 @@ end
 -- ── Ejecutar y uv ─────────────────────────────────────────────────────────────
 local function raiz(marcadores) return vim.fs.root(0, marcadores) or vim.fn.getcwd() end
 
+-- Panel inferior para ejecutar comandos. Cada ejecución reemplaza a la anterior
+-- y la salida queda a la vista al terminar.
+local panel_de_ejecucion
 local function en_terminal(cmd, cwd)
+  if panel_de_ejecucion and panel_de_ejecucion:valid() then panel_de_ejecucion:close() end
   ir_a_ventana_de_edicion()
-  Snacks.terminal.open(cmd, { cwd = cwd, auto_close = false, win = { position = 'bottom', height = 0.3 } })
+  panel_de_ejecucion = Snacks.terminal.open(cmd, { cwd = cwd, auto_close = false, win = { position = 'bottom', height = 0.3 } })
 end
 
 local function ejecutar_archivo()
@@ -428,6 +443,7 @@ end
 local function entradas_portapapeles(menu)
   entrada(menu, 'v', 'Cortar', '"+x')
   entrada(menu, 'v', 'Copiar', '"+y')
+  entrada(menu, 'n', 'Copiar línea', '"+yy')
   entrada(menu, 'n', 'Pegar', '"+gP')
   entrada(menu, 'v', 'Pegar', '"+P')
   entrada(menu, 'i', 'Pegar', '<C-r><C-o>+')
@@ -682,12 +698,19 @@ if not vim.uv.fs_stat(lazypath) then
     'https://github.com/folke/lazy.nvim.git', lazypath,
   })
   if vim.v.shell_error ~= 0 then error('No se pudo descargar lazy.nvim:\n' .. salida) end
+  -- Misma versión de lazy.nvim que fija lazy-lock.json, para que todas las máquinas queden iguales
+  local ok, fijadas = pcall(vim.json.decode, leer(vim.fn.stdpath('config') .. '/lazy-lock.json'))
+  local commit = ok and type(fijadas) == 'table' and fijadas['lazy.nvim'] and fijadas['lazy.nvim'].commit
+  if commit then vim.fn.system({ 'git', '-C', lazypath, 'checkout', '--quiet', commit }) end
 end
 vim.opt.rtp:prepend(lazypath)
 
--- Desactiva netrw (el árbol lo reemplaza)
+-- Desactiva netrw (el árbol lo reemplaza) y los proveedores de scripting que no se usan
 vim.g.loaded_netrw = 1
 vim.g.loaded_netrwPlugin = 1
+for _, proveedor in ipairs({ 'node', 'perl', 'python3', 'ruby' }) do
+  vim.g['loaded_' .. proveedor .. '_provider'] = 0
+end
 
 local PARSERS = {
   'python', 'typescript', 'tsx', 'javascript', 'json', 'yaml', 'toml', 'html', 'css',
@@ -700,6 +723,7 @@ local function puede_compilar()
   return vim.fn.executable('tree-sitter') == 1
     and (vim.fn.executable('cc') == 1 or vim.fn.executable('gcc') == 1 or vim.fn.executable('clang') == 1)
 end
+local instalacion_de_parsers -- tarea en curso; :InstalarTodo espera a que termine
 
 require('lazy').setup({
   -- Tema de colores
@@ -721,7 +745,7 @@ require('lazy').setup({
   {
     'folke/snacks.nvim',
     lazy = false,
-    priority = 900,
+    priority = 1000,
     opts = {
       bigfile = { enabled = true },
       quickfile = { enabled = true },
@@ -784,6 +808,8 @@ require('lazy').setup({
           },
         },
         filters = { dotfiles = false, custom = { '^\\.git$', '^__pycache__$' } },
+        -- Con varias divisiones abre en la última usada, sin preguntar por teclado en cuál.
+        actions = { open_file = { window_picker = { enable = false } } },
         on_attach = function(buf)
           api.config.mappings.default_on_attach(buf)
           local function m(lhs, accion, desc)
@@ -911,10 +937,10 @@ require('lazy').setup({
     branch = 'main',
     lazy = false,
     build = function()
-      if puede_compilar() then vim.cmd('TSUpdate') end
+      if puede_compilar() then require('nvim-treesitter').update() end
     end,
     config = function()
-      if puede_compilar() then require('nvim-treesitter').install(PARSERS) end
+      if puede_compilar() then instalacion_de_parsers = require('nvim-treesitter').install(PARSERS) end
     end,
   },
 
@@ -1054,6 +1080,7 @@ vim.lsp.config('basedpyright', {
 })
 
 vim.lsp.config('ruff', {
+  capabilities = { general = { positionEncodings = { 'utf-16' } } }, -- igual que basedpyright
   on_attach = function(cliente)
     cliente.server_capabilities.hoverProvider = false -- la documentación la da el servidor de tipos
   end,
@@ -1182,7 +1209,7 @@ end, { desc = 'uv add…' })
 -- Lo usa bootstrap.sh para dejar todo instalado sin abrir la interfaz
 vim.api.nvim_create_user_command('InstalarTodo', function()
   pcall(vim.cmd, 'MasonToolsInstallSync')
-  if puede_compilar() then require('nvim-treesitter').install(PARSERS):wait(600000) end
+  if instalacion_de_parsers then instalacion_de_parsers:wait(600000) end
 end, { desc = 'Instala servidores de lenguaje y parsers (bloquea hasta terminar)' })
 
 local con_interfaz = #vim.api.nvim_list_uis() > 0

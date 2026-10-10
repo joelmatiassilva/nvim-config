@@ -283,10 +283,10 @@ paso_plugins() {
   tiene tree-sitter || error "Falta tree-sitter. Ejecuta: $0 herramientas"
   tiene git || error "Falta git."
   enlazar_config
-  info "Instalando plugins (versiones de lazy-lock.json)…"
-  NVIM_APPNAME="$APP" "$nvim" --headless "+Lazy! restore" +qa
-  info "Instalando servidores de lenguaje y parsers (puede tardar unos minutos)…"
-  NVIM_APPNAME="$APP" "$nvim" --headless "+InstalarTodo" +qa
+  info "Instalando plugins (versiones de lazy-lock.json), servidores de lenguaje y parsers…"
+  info "Puede tardar unos minutos."
+  # Una sola sesión: así :InstalarTodo espera a la misma instalación que arranca init.lua.
+  NVIM_APPNAME="$APP" "$nvim" --headless "+Lazy! restore" "+InstalarTodo" +qa
   printf '\n'
   ok "Plugins listos"
 }
