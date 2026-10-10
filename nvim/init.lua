@@ -192,6 +192,19 @@ o.pumborder = 'rounded'      -- borde del menú de clic derecho
 o.foldcolumn = '1'           -- columna de pliegues: clic para plegar o desplegar
 o.foldtext = ''              -- la línea plegada conserva sus colores
 
+-- Ctrl+h/j/k/l dentro de tmux: al llegar al borde de Neovim pasa al panel vecino.
+-- No da la vuelta ni sale de un panel ampliado. La otra mitad está en tmux/tmux.conf.
+for tecla, d in pairs({ h = { 'L', 'left', 'la izquierda' }, j = { 'D', 'bottom', 'abajo' }, k = { 'U', 'top', 'arriba' }, l = { 'R', 'right', 'la derecha' } }) do
+  map('n', '<C-' .. tecla .. '>', function()
+    local antes = vim.api.nvim_get_current_win()
+    vim.cmd.wincmd(tecla)
+    if vim.api.nvim_get_current_win() == antes and vim.env.TMUX then
+      local si_hay_panel = ('#{&&:#{==:#{window_zoomed_flag},0},#{==:#{pane_at_%s},0}}'):format(d[2])
+      vim.system({ 'tmux', 'if-shell', '-F', si_hay_panel, 'select-pane -' .. d[1] })
+    end
+  end, { desc = 'Ir a la división o panel de ' .. d[3] })
+end
+
 local ic = vim.fn.nr2char
 local ICO = OPC.nerd_font
     and {
@@ -763,6 +776,12 @@ require('lazy').setup({
           files = { hidden = true, exclude = EXCLUIR },
           grep = { hidden = true, exclude = EXCLUIR },
         },
+        -- Abrir el resultado en una división vertical: el Ctrl+V de fábrica no sirve
+        -- en Windows Terminal (pega), así que se agrega Alt+V. Ctrl+S abre en horizontal.
+        win = {
+          input = { keys = { ['<a-v>'] = { 'edit_vsplit', mode = { 'i', 'n' } } } },
+          list = { keys = { ['<a-v>'] = 'edit_vsplit' } },
+        },
       },
     },
   },
@@ -822,6 +841,9 @@ require('lazy').setup({
           m('/', buscar_en_arbol, 'Buscar en el árbol (todas las subcarpetas)')
           m('v', api.node.open.vertical, 'Abrir en división vertical')
           m('h', api.node.open.horizontal, 'Abrir en división horizontal')
+          -- Ctrl+k queda libre para moverse entre divisiones; la información pasa a i.
+          vim.keymap.del('n', '<C-k>', { buffer = buf })
+          m('i', api.node.show_info_popup, 'Información del archivo')
         end,
       })
     end,

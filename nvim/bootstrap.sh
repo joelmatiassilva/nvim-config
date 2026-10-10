@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
-# bootstrap.sh — deja una máquina lista para esta configuración de Neovim.
+# bootstrap.sh — deja una máquina lista para esta configuración de Neovim y tmux.
 #
-#   ./bootstrap.sh               todo: herramientas, Neovim, fuente, plugins y revisión
+#   ./bootstrap.sh               todo: herramientas, Neovim, fuente, tmux, plugins y revisión
 #   ./bootstrap.sh revisar       solo muestra qué hay y qué falta (no cambia nada)
-#   ./bootstrap.sh herramientas  compilador, tree-sitter, uv, ruff, basedpyright…
+#   ./bootstrap.sh herramientas  compilador, tree-sitter, uv, ruff, basedpyright, tmux…
 #   ./bootstrap.sh nvim          Neovim en ~/.local (sin sudo)
 #   ./bootstrap.sh fuente        JetBrainsMono Nerd Font (en WSL: Windows + Windows Terminal)
+#   ./bootstrap.sh tmux          enlaza ~/.tmux.conf a ../tmux/tmux.conf
 #   ./bootstrap.sh plugins       plugins, servidores de lenguaje y parsers
 #
 # Es idempotente: se puede ejecutar las veces que haga falta.
@@ -19,10 +20,15 @@ TREE_SITTER_MINIMO="0.26.1"
 NERD_FONTS_VERSION="${NERD_FONTS_VERSION:-v3.5.1}"
 FUENTE="JetBrainsMono Nerd Font"
 ESTILOS=(Regular Bold Italic BoldItalic)
+TMUX_MINIMO="3.2"
+WIN32YANK_VERSION="${WIN32YANK_VERSION:-v0.1.1}"
 
 APP="${NVIM_APPNAME:-nvim}"
-REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Ruta real de esta carpeta, aunque el script se invoque a través de ~/.config/nvim.
+REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}/$APP"
+TMUX_CONF="$(dirname "$REPO")/tmux/tmux.conf"
+TMUX_DESTINO="$HOME/.tmux.conf"
 BIN="$HOME/.local/bin"
 OPT="$HOME/.local/opt"
 NVIM_DIR="$OPT/nvim-$NVIM_VERSION"
@@ -48,6 +54,7 @@ version_ok() { [ "$(printf '%s\n%s\n' "$1" "$2" | sort -V | head -n 1)" = "$1" ]
 
 version_nvim() { "$1" --version 2>/dev/null | sed -n -E '1s/^NVIM v([0-9.]+).*/\1/p'; }
 version_tree_sitter() { tree-sitter --version 2>/dev/null | sed -E 's/^tree-sitter ([0-9.]+).*/\1/'; }
+version_tmux() { tmux -V 2>/dev/null | sed -E 's/^tmux ([0-9.]+).*/\1/'; }
 
 # Imprime la ruta de un Neovim que sirva (el de ~/.local/opt tiene prioridad).
 buscar_nvim() {
@@ -83,6 +90,32 @@ instalar_tree_sitter() {
   ok "tree-sitter $(version_tree_sitter) instalado en $BIN"
 }
 
+# En WSL, win32yank es la forma rápida y fiel (acentos incluidos) de llegar al
+# portapapeles de Windows. Lo usan Neovim y tmux.
+instalar_win32yank() {
+  es_wsl || return 0
+  if tiene win32yank.exe; then
+    ok "win32yank.exe (portapapeles de Windows)"
+    return
+  fi
+  if [ "$ARQ" != x86_64 ]; then
+    aviso "No hay win32yank para $ARQ; el portapapeles usará OSC 52."
+    return
+  fi
+  local tmp
+  tmp="$(mktemp -d)"
+  if curl -fsSL -o "$tmp/win32yank.zip" "https://github.com/equalsraf/win32yank/releases/download/$WIN32YANK_VERSION/win32yank-x64.zip" \
+    && unzip -q -o "$tmp/win32yank.zip" win32yank.exe -d "$tmp"; then
+    mkdir -p "$BIN"
+    mv -f "$tmp/win32yank.exe" "$BIN/win32yank.exe"
+    chmod +x "$BIN/win32yank.exe"
+    ok "win32yank.exe instalado en $BIN"
+  else
+    aviso "No se pudo descargar win32yank.exe; el portapapeles usará OSC 52."
+  fi
+  rm -rf "$tmp"
+}
+
 instalar_uv_tool() { # paquete ejecutable
   if tiene "$2"; then
     ok "$1"
@@ -98,6 +131,7 @@ paso_herramientas() {
   tiene_cc || faltan+=(build-essential)
   tiene rg || faltan+=(ripgrep)
   tiene fd || tiene fdfind || faltan+=(fd-find)
+  tiene tmux || faltan+=(tmux)
 
   if ((${#faltan[@]})); then
     if tiene apt-get; then
@@ -124,6 +158,7 @@ paso_herramientas() {
   fi
 
   instalar_tree_sitter
+  instalar_win32yank
 
   if ! tiene uv; then
     info "Instalando uv…"
@@ -266,10 +301,45 @@ paso_fuente() {
   fi
 }
 
+# ── tmux ────────────────────────────────────────────────────────────────────
+tmux_enlazado() { [ -L "$TMUX_DESTINO" ] && [ "$(readlink -f "$TMUX_DESTINO")" = "$TMUX_CONF" ]; }
+
+paso_tmux() {
+  titulo "tmux"
+  if [ ! -f "$TMUX_CONF" ]; then
+    info "No hay $TMUX_CONF; se omite."
+    return 0
+  fi
+  if tiene tmux; then
+    if version_ok "$TMUX_MINIMO" "$(version_tmux)"; then
+      ok "tmux $(version_tmux)"
+    else
+      aviso "tmux $(version_tmux) es anterior a $TMUX_MINIMO: el portapapeles y los colores pueden fallar."
+    fi
+  else
+    aviso "tmux no está instalado → $0 herramientas"
+  fi
+  if tmux_enlazado; then
+    ok "$TMUX_DESTINO ya apunta al repo"
+  else
+    if [ -e "$TMUX_DESTINO" ] || [ -L "$TMUX_DESTINO" ]; then
+      local respaldo
+      respaldo="$TMUX_DESTINO.bak-$(date +%Y%m%d-%H%M%S)"
+      mv "$TMUX_DESTINO" "$respaldo"
+      info "Respaldo de la configuración anterior: $respaldo"
+    fi
+    ln -s "$TMUX_CONF" "$TMUX_DESTINO"
+    ok "Enlace $TMUX_DESTINO → $TMUX_CONF"
+  fi
+  # Si hay un tmux abierto, toma la configuración nueva sin reiniciarlo.
+  if tiene tmux && tmux list-sessions >/dev/null 2>&1; then
+    if tmux source-file "$TMUX_DESTINO"; then info "Configuración recargada en el tmux abierto."; fi
+  fi
+}
+
 # ── Plugins ─────────────────────────────────────────────────────────────────
 enlazar_config() {
-  [ "$REPO" = "$CONFIG" ] && return 0
-  if [ -L "$CONFIG" ] && [ "$(readlink -f "$CONFIG")" = "$REPO" ]; then return 0; fi
+  [ "$(readlink -f "$CONFIG" 2>/dev/null || true)" = "$REPO" ] && return 0
   [ -e "$CONFIG" ] && error "$CONFIG ya existe. Muévelo (por ejemplo a $CONFIG.bak) y vuelve a ejecutar."
   mkdir -p "$(dirname "$CONFIG")"
   ln -s "$REPO" "$CONFIG"
@@ -315,8 +385,23 @@ paso_revisar() {
   if tiene ruff; then ok "ruff"; else aviso "ruff → uv tool install ruff"; fi
   if tiene basedpyright-langserver; then ok "basedpyright"; else aviso "basedpyright → uv tool install basedpyright"; fi
   if es_wsl; then
-    if tiene win32yank.exe; then ok "win32yank.exe (portapapeles de Windows)"; else aviso "win32yank.exe no está: se usará OSC 52 + PowerShell para el portapapeles"; fi
+    if tiene win32yank.exe; then ok "win32yank.exe (portapapeles de Windows)"; else aviso "win32yank.exe no está: el portapapeles usará OSC 52 → $0 herramientas"; fi
     if tiene reg.exe && fuente_registrada_windows; then ok "Fuente $FUENTE instalada en Windows"; else aviso "Fuente $FUENTE sin instalar en Windows → $0 fuente"; fi
+  fi
+  if [ -f "$TMUX_CONF" ]; then
+    if ! tiene tmux; then
+      aviso "tmux no está instalado (opcional) → $0 herramientas"
+    elif version_ok "$TMUX_MINIMO" "$(version_tmux)"; then
+      ok "tmux $(version_tmux)"
+    else
+      aviso "tmux $(version_tmux): hace falta $TMUX_MINIMO o superior para el portapapeles y los colores"
+    fi
+    if tmux_enlazado; then ok "$TMUX_DESTINO enlazado al repo"; else aviso "$TMUX_DESTINO no apunta al repo → $0 tmux"; fi
+    if infocmp tmux-256color >/dev/null 2>&1; then
+      ok "terminfo tmux-256color"
+    else
+      aviso "Falta el terminfo tmux-256color (tmux usará screen-256color) → sudo apt-get install -y ncurses-term"
+    fi
   fi
   if ((esencial)); then
     printf '\n'
@@ -333,9 +418,10 @@ case "${1:-todo}" in
     paso_herramientas
     paso_nvim
     paso_fuente
+    paso_tmux
     paso_plugins
     paso_revisar
     ;;
-  herramientas|nvim|fuente|plugins|revisar) "paso_$1" ;;
-  *) sed -n '2,12p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 2 ;;
+  herramientas|nvim|fuente|tmux|plugins|revisar) "paso_$1" ;;
+  *) sed -n '2,13p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 2 ;;
 esac
