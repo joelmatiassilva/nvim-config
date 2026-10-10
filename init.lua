@@ -1014,13 +1014,14 @@ require('lazy').setup({
     'iamcco/markdown-preview.nvim',
     cmd = { 'MarkdownPreviewToggle', 'MarkdownPreview', 'MarkdownPreviewStop' },
     ft = 'markdown',
-    -- --no-package-lock evita que npm reescriba el yarn.lock del plugin
+    -- yarn respeta el yarn.lock del plugin (npm instalaría versiones nuevas que no le sirven).
+    -- Si no hay Node, se baja el binario precompilado.
     build = function(plugin)
-      if vim.fn.executable('npm') == 1 then
-        vim.system({ 'npm', 'install', '--no-package-lock' }, { cwd = plugin.dir .. '/app' }):wait()
-      else
-        vim.fn['mkdp#util#install']()
+      if vim.fn.executable('npx') == 1 then
+        local r = vim.system({ 'npx', '--yes', 'yarn', 'install', '--frozen-lockfile' }, { cwd = plugin.dir .. '/app' }):wait()
+        if r.code == 0 then return end
       end
+      vim.fn['mkdp#util#install_sync']()
     end,
     init = function() vim.g.mkdp_filetypes = { 'markdown' } end,
   },
